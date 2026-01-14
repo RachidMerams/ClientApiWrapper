@@ -1,0 +1,87 @@
+from fastapi import FastAPI, HTTPException
+import requests
+import subprocess
+import tempfile
+import re
+
+VAULT_ADDR = "http://127.0.0.1:8200/v1"
+PKI_PATH = "/pki_sub"
+VAULT_TOKEN = "root"
+
+HEADERS = {"X-Vault-Token": VAULT_TOKEN}
+
+app = FastAPI()
+
+
+def vault_list_certs():
+    url = f"{VAULT_ADDR}{PKI_PATH}/certs"
+    r = requests.request("LIST", url, headers=HEADERS)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Vault LIST error: {r.text}")
+    return r.json()["data"]["keys"]
+
+
+def vault_get_cert_pem(serial):
+    url = f"{VAULT_ADDR}{PKI_PATH}/cert/{serial}"
+    r = requests.get(url, headers=HEADERS)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Vault GET error: {r.text}")
+    return r.json()["data"]["certificate"]
+
+
+def parse_cert_with_openssl(pem):
+    """Analyse un certificat PEM avec OpenSSL et retourne un dict propre."""
+
+    # On écrit le cert dans un fichier temporaire
+    with tempfile.NamedTemporaryFile(delete=True) as tmp:
+        tmp.write(pem.encode())
+        tmp.flush()
+
+        # Appel OpenSSL
+        result = subprocess.run(
+            ["openssl", "x509", "-in", tmp.name, "-noout", "-text"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise Exception(f"OpenSSL error: {result.stderr}")
+
+        text = result.stdout
+
+        # Extraction des champs
+        issuer = re.search(r"Issuer:\s*(.*)", text)
+        subject = re.search(r"Subject:\s*(.*)", text)
+        serial = re.search(r"Serial Number:\s*([0-9A-F:]+)", text)
+        not_before = re.search(r"Not Before:\s*(.*)", text)
+        not_after = re.search(r"Not After :\s*(.*)", text)
+        san = re.search(r"X509v3 Subject Alternative Name:\s*\n\s*(.*)", text)
+
+        return {
+            "issuer": issuer.group(1).strip() if issuer else None,
+            "subject": subject.group(1).strip() if subject else None,
+            "serial_x509": serial.group(1).strip() if serial else None,
+            "not_before": not_before.group(1).strip() if not_before else None,
+            "not_after": not_after.group(1).strip() if not_after else None,
+            "sans": san.group(1).strip() if san else None,
+        }
+
+
+@app.get("/certificates")
+def list_certificates():
+    serials = vault_list_certs()
+    certs = []
+
+    for serial in serials:
+        pem = vault_get_cert_pem(serial)
+        parsed = parse_cert_with_openssl(pem)
+
+        certs.append({
+            "vault_serial": serial,
+            **parsed
+        })
+
+    return {
+        "count": len(certs),
+        "certificates": certs
+    }

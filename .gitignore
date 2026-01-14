@@ -1,0 +1,5 @@
+*.swp
+*.pem
+*.crt
+*.key
+__pycache__
