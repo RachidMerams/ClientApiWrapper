@@ -8,8 +8,11 @@ import re
 VAULT_ADDR = "http://127.0.0.1:8200/v1"
 PKI_PATH = "/pki_sub"
 VAULT_TOKEN = "root"
+NAMESPACE = "TODO"
 
-HEADERS = {"X-Vault-Token": VAULT_TOKEN}
+HEADERS = {
+    "X-Vault-Token": VAULT_TOKEN,
+    "X-Vault-Namespace": NAMESPACE}
 
 app = FastAPI()
 
