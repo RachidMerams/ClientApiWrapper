@@ -1,18 +1,21 @@
 from fastapi import FastAPI, HTTPException
+import os
 import requests
 import subprocess
 import tempfile
 import re
 
-#A adapter 
-VAULT_ADDR = "http://127.0.0.1:8200/v1"
-PKI_PATH = "/pki_sub"
-VAULT_TOKEN = "root"
-NAMESPACE = "TODO"
-
+#A adapter en exportant UNIQUEMENT
+VAULT_ADDR = os.environ["VAULT_ADDR"]
+VAULT_TOKEN = os.environ["VAULT_TOKEN"]
+VAULT_NAMESPACE = os.environ["VAULT_NAMESPACE"]
+PKI_PATH = os.environ["PKI_PATH"]
 HEADERS = {
-    "X-Vault-Token": VAULT_TOKEN,
-    "X-Vault-Namespace": NAMESPACE}
+					"X-Vault-Token": VAULT_TOKEN,
+					"X-Vault-Namespace": VAULT_NAMESPACE}
+
+#print("[DEBUG] Vault server addr set to => "+ VAULT_ADDR)
+#print("[DEBUG] Full addr => "+VAULT_ADDR+PKI_PATH)
 
 app = FastAPI()
 
@@ -23,7 +26,7 @@ app = FastAPI()
 
 def vault_list_certs():
     url = f"{VAULT_ADDR}{PKI_PATH}/certs"
-    r = requests.request("LIST", url, headers=HEADERS)
+    r = requests.request("LIST", url, headers=HEADERS, verify=False)
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Vault LIST error: {r.text}")
     return r.json()["data"]["keys"]
@@ -31,7 +34,7 @@ def vault_list_certs():
 
 def vault_get_cert(serial):
     url = f"{VAULT_ADDR}{PKI_PATH}/cert/{serial}"
-    r = requests.get(url, headers=HEADERS)
+    r = requests.get(url, headers=HEADERS, verify=False)
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Vault GET error: {r.text}")
     return r.json()["data"]
