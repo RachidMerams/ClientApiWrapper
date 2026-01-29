@@ -1,9 +1,15 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 import os
 import requests
 import subprocess
 import tempfile
 import re
+import urllib3
+
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 #A adapter en exportant UNIQUEMENT
 VAULT_ADDR = os.environ["VAULT_ADDR"]
@@ -19,6 +25,10 @@ HEADERS = {
 
 app = FastAPI()
 
+@app.get("/")
+def serve_swagger():
+    return RedirectResponse(url="/docs")
+    
 
 # ------------------------------
 # Vault helpers functions
